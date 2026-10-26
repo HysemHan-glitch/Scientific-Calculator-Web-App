@@ -1,0 +1,788 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Scientific Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: a desk calculator. A lit LCD sits on top, keys are colored by job (digits, functions, operators, equals),
+     and the history is a quiet panel beside it on wide screens and below it on phones. */
+  :root {
+    --bg: #e3e7e2;
+    --shell: #f3f5f2;
+    --line: #c7cfc6;
+    --ink: #1b2420;
+    --muted: #55645c;
+    --lcd: #c9d3b8;
+    --lcd-ink: #1f2a1b;
+    --lcd-dim: #4a5842;
+    --lcd-err: #8a1c12;
+    --lcd-edge: #aab599;
+    --key-num: #ffffff;
+    --key-num-ink: #1b2420;
+    --key-fn: #dde3dc;
+    --key-fn-ink: #1b2420;
+    --key-op: #c3ccc3;
+    --key-op-ink: #1b2420;
+    --key-eq: #2f6b4f;
+    --key-eq-ink: #ffffff;
+    --key-clear: #f2d6d0;
+    --key-clear-ink: #7a1d12;
+    --key-edge: rgba(27, 36, 32, 0.22);
+    --focus: #2f6b4f;
+    --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101412;
+      --shell: #1a201d;
+      --line: #2e3833;
+      --ink: #e8eee9;
+      --muted: #9aaba1;
+      --lcd: #aebd9b;
+      --lcd-ink: #162013;
+      --lcd-dim: #3f4c38;
+      --lcd-err: #7c160e;
+      --lcd-edge: #8e9d7c;
+      --key-num: #2d3732;
+      --key-num-ink: #eef3ef;
+      --key-fn: #242d29;
+      --key-fn-ink: #d3ddd6;
+      --key-op: #3c4842;
+      --key-op-ink: #eef3ef;
+      --key-eq: #6fcb9f;
+      --key-eq-ink: #09170f;
+      --key-clear: #4b2b27;
+      --key-clear-ink: #ffcfc6;
+      --key-edge: rgba(0, 0, 0, 0.55);
+      --focus: #6fcb9f;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101412;
+    --shell: #1a201d;
+    --line: #2e3833;
+    --ink: #e8eee9;
+    --muted: #9aaba1;
+    --lcd: #aebd9b;
+    --lcd-ink: #162013;
+    --lcd-dim: #3f4c38;
+    --lcd-err: #7c160e;
+    --lcd-edge: #8e9d7c;
+    --key-num: #2d3732;
+    --key-num-ink: #eef3ef;
+    --key-fn: #242d29;
+    --key-fn-ink: #d3ddd6;
+    --key-op: #3c4842;
+    --key-op-ink: #eef3ef;
+    --key-eq: #6fcb9f;
+    --key-eq-ink: #09170f;
+    --key-clear: #4b2b27;
+    --key-clear-ink: #ffcfc6;
+    --key-edge: rgba(0, 0, 0, 0.55);
+    --focus: #6fcb9f;
+    color-scheme: dark;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body {
+    margin: 0;
+    min-height: 100%;
+    background: var(--bg);
+    color: var(--ink);
+    font: 400 1rem/1.5 var(--font-ui);
+    padding-block: clamp(20px, 5vw, 48px);
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  button { font: inherit; color: inherit; }
+  :where(button):focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  .app { max-width: 24rem; margin-inline: auto; display: grid; gap: 16px; align-items: start; }
+  @media (min-width: 52rem) {
+    .app { max-width: 46rem; grid-template-columns: 24rem minmax(0, 1fr); gap: 16px 24px; }
+    .app > header { grid-column: 1 / -1; }
+  }
+  .app > * { min-width: 0; }
+
+  header h1 { margin: 0; font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+
+  /* Calculator body */
+  .shell { background: var(--shell); border: 1px solid var(--line); border-radius: 16px; padding: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+
+  .lcd {
+    min-width: 0; background: var(--lcd); color: var(--lcd-ink); border: 1px solid var(--lcd-edge); border-radius: 8px;
+    padding: 8px 14px 12px; box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.2);
+  }
+  .lcd-status { display: flex; align-items: center; gap: 12px; min-height: 26px; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.1em; }
+  .ind { opacity: 0.28; }
+  .ind.on { opacity: 1; }
+  .copy {
+    margin-left: auto; border: 0; background: none; padding: 4px 0 4px 8px; cursor: pointer; color: var(--lcd-dim);
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.06em; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .copy:focus-visible { outline-color: var(--lcd-ink); }
+  .lcd-prev, .lcd-main { text-align: right; white-space: nowrap; overflow-x: auto; scrollbar-width: none; font-family: var(--font-mono); }
+  .lcd-prev::-webkit-scrollbar, .lcd-main::-webkit-scrollbar { display: none; }
+  .lcd-prev { min-height: 1.5em; font-size: 0.875rem; line-height: 1.5; color: var(--lcd-dim); }
+  .lcd-prev.err { color: var(--lcd-err); font-weight: 500; }
+  .lcd-main { font-size: 2.25rem; font-weight: 500; line-height: 1.2; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+  .lcd-main[data-size="m"] { font-size: 1.75rem; }
+  .lcd-main[data-size="s"] { font-size: 1.375rem; }
+
+  .keys { display: grid; gap: 6px; }
+  .keys.c5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .keys.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .key {
+    min-height: 46px; padding: 0 2px; border: 0; border-radius: 8px; cursor: pointer;
+    font-family: var(--font-mono); font-size: 1.25rem; font-weight: 500; line-height: 1;
+    box-shadow: 0 2px 0 var(--key-edge); transition: transform 0.05s, box-shadow 0.05s, filter 0.1s;
+  }
+  .key:hover { filter: brightness(1.04); }
+  .key:active { transform: translateY(2px); box-shadow: 0 0 0 var(--key-edge); }
+  .k-num { background: var(--key-num); color: var(--key-num-ink); }
+  .k-op { background: var(--key-op); color: var(--key-op-ink); font-size: 1.375rem; }
+  .k-eq { background: var(--key-eq); color: var(--key-eq-ink); font-size: 1.5rem; font-weight: 600; }
+  .k-clear { background: var(--key-clear); color: var(--key-clear-ink); font-size: 1rem; font-weight: 600; }
+  .k-fn { background: var(--key-fn); color: var(--key-fn-ink); min-height: 40px; font-family: var(--font-ui); font-size: 0.9375rem; font-weight: 500; }
+  .k-fn[aria-pressed="true"] { background: var(--ink); color: var(--shell); }
+  .k-mem {
+    min-height: 32px; background: none; box-shadow: none; border: 1px solid var(--line); color: var(--muted);
+    font-family: var(--font-ui); font-size: 0.8125rem; font-weight: 600; letter-spacing: 0.04em;
+  }
+  .k-mem:active { transform: none; background: var(--line); }
+  .hint { margin: 2px 2px 0; font-size: 0.8125rem; color: var(--muted); }
+
+  /* History */
+  .panel { background: var(--shell); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .panel-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 8px; }
+  .panel-head h2 { margin: 0; font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .linkbtn {
+    background: none; border: 0; padding: 6px 0; color: var(--ink); font-size: 0.8125rem; font-weight: 500;
+    cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+  }
+  .history { list-style: none; margin: 0; padding: 0; max-height: 26rem; overflow-y: auto; }
+  .history li + li { border-top: 1px solid var(--line); }
+  .hist-item {
+    display: grid; gap: 2px; width: 100%; padding: 10px 4px; border: 0; border-radius: 6px; background: none;
+    text-align: right; cursor: pointer; font-family: var(--font-mono);
+  }
+  .hist-item:hover { background: var(--bg); }
+  .hx { font-size: 0.8125rem; color: var(--muted); overflow-wrap: anywhere; }
+  .hr { font-size: 1.125rem; font-weight: 500; overflow-wrap: anywhere; }
+  .empty { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+
+  .sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+  @media (max-width: 360px) {
+    .shell { padding: 10px; }
+    .lcd-main { font-size: 1.875rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { .key { transition: none; } }
+</style>
+
+<main class="app">
+  <header><h1>Scientific Calculator</h1></header>
+
+  <section class="shell" aria-label="Calculator">
+    <div class="lcd">
+      <div class="lcd-status" aria-hidden="true">
+        <span class="ind" id="ind-deg">DEG</span>
+        <span class="ind" id="ind-rad">RAD</span>
+        <span class="ind" id="ind-2nd">2ND</span>
+        <span class="ind" id="ind-m">M</span>
+      </div>
+      <div class="lcd-prev" id="prev">&nbsp;</div>
+      <div class="lcd-main" id="main" aria-hidden="true">0</div>
+    </div>
+    <div class="sr" id="sr" role="status" aria-live="polite"></div>
+
+    <div class="keys c4" id="keys-mem"></div>
+    <div class="keys c5" id="keys-sci"></div>
+    <div class="keys c4" id="keys-pad"></div>
+    <p class="hint">Keyboard works too: type numbers and operators, Enter to calculate, Backspace to delete, Esc to clear.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="hist-h">
+    <div class="panel-head">
+      <h2 id="hist-h">History</h2>
+      <button type="button" class="linkbtn" id="hist-clear" hidden>Clear</button>
+    </div>
+    <ul class="history" id="history"></ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  const STORE_KEY = 'scientific-calculator.v1';
+  const MAX_LEN = 80;
+  const HISTORY_MAX = 30;
+  const FUNCS = ['asin', 'acos', 'atan', 'sin', 'cos', 'tan', 'ln', 'log', '√', '∛'];
+
+  class CalcError extends Error {}
+
+  // ===================== expression engine (no eval) =====================
+  function tokenize(src) {
+    const toks = [];
+    let i = 0;
+    while (i < src.length) {
+      const rest = src.slice(i);
+      let m = /^(?:\d+\.?\d*|\.\d+)(?:E[−-]?\d+)?/.exec(rest);
+      if (m) { toks.push({ t: 'num', v: parseFloat(m[0].replace('−', '-')) }); i += m[0].length; continue; }
+      if (rest.startsWith('Ans')) { toks.push({ t: 'ans' }); i += 3; continue; }
+      const fn = FUNCS.find((f) => rest.startsWith(f));
+      if (fn) { toks.push({ t: 'fn', v: fn }); i += fn.length; continue; }
+      const c = src[i];
+      if (c === 'π') toks.push({ t: 'const', v: Math.PI });
+      else if (c === 'e') toks.push({ t: 'const', v: Math.E });
+      else if ('+−×÷^!%()'.includes(c)) toks.push({ t: 'op', v: c });
+      else throw new CalcError('Syntax error');
+      i++;
+    }
+    return toks;
+  }
+
+  const wrap360 = (x) => ((x % 360) + 360) % 360;
+  function sinDeg(x) {
+    const r = wrap360(x);
+    if (r === 0 || r === 180) return 0;
+    if (r === 90) return 1;
+    if (r === 270) return -1;
+    return Math.sin((r * Math.PI) / 180);
+  }
+  function tanDeg(x) {
+    const r = ((x % 180) + 180) % 180;
+    if (r === 90) throw new CalcError('Tangent is undefined');
+    if (r === 0) return 0;
+    return Math.tan((r * Math.PI) / 180);
+  }
+  const snap = (v, arg) => (Math.abs(v) < 1e-15 && Math.abs(arg) > 1e-3 ? 0 : v);
+
+  function factorial(n) {
+    if (!Number.isInteger(n) || n < 0) throw new CalcError('Needs a whole number, 0 or more');
+    if (n > 170) throw new CalcError('Result too large');
+    let r = 1;
+    for (let i = 2; i <= n; i++) r *= i;
+    return r;
+  }
+  function power(base, ex) {
+    if (base === 0 && ex < 0) throw new CalcError('Cannot divide by zero');
+    if (base < 0 && !Number.isInteger(ex)) throw new CalcError('Not a real number');
+    return Math.pow(base, ex);
+  }
+  function applyFn(name, x, deg) {
+    switch (name) {
+      case 'sin': return deg ? sinDeg(x) : snap(Math.sin(x), x);
+      case 'cos': return deg ? sinDeg(x + 90) : snap(Math.cos(x), x);
+      case 'tan':
+        if (deg) return tanDeg(x);
+        if (Math.abs(Math.cos(x)) < 1e-12) throw new CalcError('Tangent is undefined');
+        return Math.tan(x);
+      case 'asin': case 'acos': {
+        if (Math.abs(x) > 1) throw new CalcError('Input out of range');
+        const r = name === 'asin' ? Math.asin(x) : Math.acos(x);
+        return deg ? (r * 180) / Math.PI : r;
+      }
+      case 'atan': return deg ? (Math.atan(x) * 180) / Math.PI : Math.atan(x);
+      case 'ln': if (x <= 0) throw new CalcError('Input out of range'); return Math.log(x);
+      case 'log': if (x <= 0) throw new CalcError('Input out of range'); return Math.log10(x);
+      case '√': if (x < 0) throw new CalcError('Not a real number'); return Math.sqrt(x);
+      case '∛': return Math.cbrt(x);
+    }
+    throw new CalcError('Syntax error');
+  }
+
+  // Grammar (lowest to highest precedence):
+  //   expr    = term (("+" | "−") term)*
+  //   term    = unary (("×" | "÷") unary | implicit-multiply unary)*
+  //   unary   = ("−" | "+") unary | power
+  //   power   = postfix ("^" unary)?          right-associative, so 2^3^2 = 2^9 and −2^2 = −4
+  //   postfix = primary ("!" | "%")*
+  //   primary = number | π | e | Ans | fn "(" expr ")" | "(" expr ")"
+  // A missing ")" at the very end is closed for you.
+  function evaluate(src, ctx) {
+    const toks = tokenize(src);
+    if (!toks.length) throw new CalcError('Nothing to calculate');
+    let p = 0;
+    const isOp = (v) => p < toks.length && toks[p].t === 'op' && toks[p].v === v;
+    const startsOperand = () => {
+      const t = toks[p];
+      return !!t && (t.t === 'num' || t.t === 'const' || t.t === 'ans' || t.t === 'fn' || (t.t === 'op' && t.v === '('));
+    };
+
+    function expr() {
+      let v = term();
+      while (isOp('+') || isOp('−')) {
+        const op = toks[p++].v;
+        const r = term();
+        v = op === '+' ? v + r : v - r;
+      }
+      return v;
+    }
+    function term() {
+      let v = unary();
+      for (;;) {
+        if (isOp('×')) { p++; v *= unary(); }
+        else if (isOp('÷')) {
+          p++;
+          const r = unary();
+          if (r === 0) throw new CalcError('Cannot divide by zero');
+          v /= r;
+        } else if (startsOperand()) v *= unary();
+        else return v;
+      }
+    }
+    function unary() {
+      if (isOp('−')) { p++; return -unary(); }
+      if (isOp('+')) { p++; return unary(); }
+      return pow();
+    }
+    function pow() {
+      const base = postfix();
+      if (isOp('^')) { p++; return power(base, unary()); }
+      return base;
+    }
+    function postfix() {
+      let v = primary();
+      for (;;) {
+        if (isOp('!')) { p++; v = factorial(v); }
+        else if (isOp('%')) { p++; v /= 100; }
+        else return v;
+      }
+    }
+    function group() {
+      p++; // "("
+      const v = expr();
+      if (isOp(')')) p++;
+      else if (p < toks.length) throw new CalcError('Syntax error');
+      return v;
+    }
+    function primary() {
+      const t = toks[p];
+      if (!t) throw new CalcError('Incomplete expression');
+      if (t.t === 'num' || t.t === 'const') { p++; return t.v; }
+      if (t.t === 'ans') { p++; return ctx.ans; }
+      if (t.t === 'fn') {
+        p++;
+        if (!isOp('(')) throw new CalcError('Syntax error');
+        return applyFn(t.v, group(), ctx.deg);
+      }
+      if (isOp('(')) return group();
+      throw new CalcError('Syntax error');
+    }
+
+    const v = expr();
+    if (p < toks.length) throw new CalcError('Syntax error');
+    if (Number.isNaN(v)) throw new CalcError('Not a real number');
+    if (!Number.isFinite(v)) throw new CalcError('Result too large');
+    return Number(v.toPrecision(12));
+  }
+
+  function formatNumber(n) {
+    if (n === 0) return '0';
+    const abs = Math.abs(n);
+    let s;
+    if (abs >= 1e12 || abs < 1e-9) {
+      const [m, e] = n.toExponential(9).split('e');
+      s = m.replace(/\.?0+$/, '') + 'E' + Number(e);
+    } else {
+      s = String(Number(n.toPrecision(12)));
+      if (s.includes('e')) { const [m, e] = s.split('e'); s = m + 'E' + Number(e); }
+    }
+    return s.replace(/-/g, '−');
+  }
+
+  // ===================== state =====================
+  const state = {
+    expr: '', ans: 0, hasAns: false, justEvaluated: false, prevExpr: '', error: '',
+    deg: true, second: false, memory: 0, history: [],
+  };
+  const ctx = () => ({ deg: state.deg, ans: state.hasAns ? state.ans : 0 });
+  const BIN = '+−×÷^';
+  const OPERAND_END = /(?:[0-9.)π!%e]|Ans)$/;
+
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+      if (!d) return;
+      if (typeof d.deg === 'boolean') state.deg = d.deg;
+      if (Number.isFinite(d.memory)) state.memory = d.memory;
+      if (Array.isArray(d.history)) {
+        state.history = d.history
+          .filter((x) => x && typeof x.expr === 'string' && typeof x.result === 'string')
+          .map((x) => ({ expr: x.expr.slice(0, 120), result: x.result.slice(0, 40) }))
+          .slice(0, HISTORY_MAX);
+      }
+    } catch (e) { /* storage unavailable */ }
+  }
+  function save() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify({ deg: state.deg, memory: state.memory, history: state.history })); } catch (e) { /* ignore */ }
+  }
+
+  // ===================== editing =====================
+  const openCount = (s) => (s.match(/\(/g) || []).length - (s.match(/\)/g) || []).length;
+  const autoClose = (s) => s + ')'.repeat(Math.max(0, openCount(s)));
+  const append = (t) => { if (state.expr.length + t.length <= MAX_LEN) state.expr += t; };
+  const clearError = () => { state.error = ''; };
+  function startFresh() {
+    if (state.justEvaluated) { state.expr = ''; state.prevExpr = ''; state.justEvaluated = false; }
+  }
+  function startFromAns() {
+    state.expr = state.hasAns ? 'Ans' : '';
+    state.prevExpr = '';
+    state.justEvaluated = false;
+  }
+
+  function insertDigit(d) {
+    clearError(); startFresh();
+    const seg = /[0-9.]*$/.exec(state.expr)[0];
+    if (seg === '0' && d === '0') return;
+    if (seg === '0') { state.expr = state.expr.slice(0, -1); }
+    append(d);
+  }
+  function insertDot() {
+    clearError(); startFresh();
+    const seg = /[0-9.]*$/.exec(state.expr)[0];
+    if (seg.includes('.')) return;
+    append(seg === '' ? '0.' : '.');
+  }
+  function insertOp(op) {
+    clearError();
+    if (state.justEvaluated) startFromAns();
+    if (op === '!' || op === '%') {
+      if (OPERAND_END.test(state.expr)) append(op);
+      return;
+    }
+    const e = state.expr;
+    if (!e) { if (op === '−') append('−'); return; }
+    const last = e.slice(-1);
+    if (last === '(') { if (op === '−') append('−'); return; }
+    if (BIN.includes(last)) {
+      if (op === '−' && '×÷^'.includes(last)) { append('−'); return; }
+      const stripped = e.replace(/[+−×÷^]+$/, '');
+      if (!stripped || stripped.endsWith('(')) { if (op === '−') state.expr = stripped + '−'; return; }
+      state.expr = stripped + op;
+      return;
+    }
+    append(op);
+  }
+  function insertOpen() { clearError(); startFresh(); append('('); }
+  function insertClose() {
+    clearError();
+    if (state.justEvaluated) return;
+    if (openCount(state.expr) > 0 && OPERAND_END.test(state.expr)) append(')');
+  }
+  function insertConst(c) {
+    clearError(); startFresh();
+    append(c);
+  }
+  function insertFn(name) { clearError(); startFresh(); append(name + '('); }
+  function del() {
+    clearError();
+    if (state.justEvaluated) { state.expr = formatNumber(state.ans); state.prevExpr = ''; state.justEvaluated = false; }
+    if (!state.expr) return;
+    const m = /(?:asin|acos|atan|sin|cos|tan|ln|log|√|∛)\($|Ans$/.exec(state.expr);
+    state.expr = m ? state.expr.slice(0, m.index) : state.expr.slice(0, -1);
+  }
+  function clearAll() { state.expr = ''; state.prevExpr = ''; state.error = ''; state.justEvaluated = false; }
+
+  function equals() {
+    if (!state.expr || state.justEvaluated) return;
+    try {
+      const closed = autoClose(state.expr);
+      const v = evaluate(closed, ctx());
+      state.ans = v; state.hasAns = true; state.justEvaluated = true; state.error = '';
+      state.prevExpr = closed;
+      const entry = { expr: closed, result: formatNumber(v) };
+      const top = state.history[0];
+      if (!top || top.expr !== entry.expr || top.result !== entry.result) state.history.unshift(entry);
+      state.history = state.history.slice(0, HISTORY_MAX);
+      save();
+      announce('Result ' + entry.result);
+    } catch (e) {
+      if (!(e instanceof CalcError)) throw e;
+      state.error = e.message;
+      announce('Error: ' + e.message);
+    }
+  }
+
+  // memory acts on the value shown right now
+  function currentValue() {
+    if (state.justEvaluated) return state.ans;
+    if (!state.expr) return null;
+    try { return evaluate(autoClose(state.expr), ctx()); }
+    catch (e) { if (e instanceof CalcError) { state.error = e.message; return null; } throw e; }
+  }
+  function memAdjust(sign) {
+    clearError();
+    const v = currentValue();
+    if (v === null) return;
+    state.memory = Number((state.memory + sign * v).toPrecision(12));
+    save();
+  }
+  function memRecall() {
+    clearError(); startFresh();
+    const text = formatNumber(state.memory);
+    if (/[0-9.]$/.test(state.expr)) state.expr = state.expr.replace(/[0-9.]+$/, '');
+    append(text);
+  }
+
+  const MACROS = {
+    square: () => { insertOp('^'); insertDigit('2'); },
+    cube: () => { insertOp('^'); insertDigit('3'); },
+    expE: () => { insertConst('e'); insertOp('^'); insertOpen(); },
+    pow10: () => { insertDigit('1'); insertDigit('0'); insertOp('^'); insertOpen(); },
+  };
+
+  // ===================== keys =====================
+  const mem = [
+    { label: 'MC', aria: 'Clear memory', act: 'memClear' },
+    { label: 'MR', aria: 'Recall memory', act: 'memRecall' },
+    { label: 'M+', aria: 'Add to memory', act: 'memAdd' },
+    { label: 'M−', aria: 'Subtract from memory', act: 'memSub' },
+  ].map((k) => ({ ...k, cls: 'k-mem' }));
+
+  const sci = [
+    { id: 'second', label: '2nd', aria: 'Second functions', act: 'second' },
+    { label: 'sin', label2: 'sin⁻¹', aria: 'Sine', aria2: 'Inverse sine', act: 'fn', arg: 'sin', arg2: 'asin' },
+    { label: 'cos', label2: 'cos⁻¹', aria: 'Cosine', aria2: 'Inverse cosine', act: 'fn', arg: 'cos', arg2: 'acos' },
+    { label: 'tan', label2: 'tan⁻¹', aria: 'Tangent', aria2: 'Inverse tangent', act: 'fn', arg: 'tan', arg2: 'atan' },
+    { id: 'mode', label: 'DEG', aria: 'Angle mode', act: 'mode' },
+    { label: 'ln', label2: 'eˣ', aria: 'Natural log', aria2: 'e to the power', act: 'fn', arg: 'ln', act2: 'macro', arg2: 'expE' },
+    { label: 'log', label2: '10ˣ', aria: 'Log base 10', aria2: 'Ten to the power', act: 'fn', arg: 'log', act2: 'macro', arg2: 'pow10' },
+    { label: '√', label2: '∛', aria: 'Square root', aria2: 'Cube root', act: 'fn', arg: '√', arg2: '∛' },
+    { label: 'x²', label2: 'x³', aria: 'Square', aria2: 'Cube', act: 'macro', arg: 'square', arg2: 'cube' },
+    { label: 'xʸ', aria: 'Power', act: 'op', arg: '^' },
+    { label: 'π', aria: 'Pi', act: 'const', arg: 'π' },
+    { label: 'e', aria: 'Euler’s number', act: 'const', arg: 'e' },
+    { label: 'n!', aria: 'Factorial', act: 'op', arg: '!' },
+    { label: '%', aria: 'Percent', act: 'op', arg: '%' },
+    { label: 'Ans', aria: 'Previous answer', act: 'const', arg: 'Ans' },
+  ].map((k) => ({ ...k, cls: 'k-fn' }));
+
+  const pad = [
+    { label: 'AC', aria: 'All clear', act: 'clear', cls: 'k-clear' },
+    { label: '(', aria: 'Open parenthesis', act: 'open', cls: 'k-op' },
+    { label: ')', aria: 'Close parenthesis', act: 'close', cls: 'k-op' },
+    { label: '÷', aria: 'Divide', act: 'op', arg: '÷', cls: 'k-op' },
+    ...['7', '8', '9'].map((d) => ({ label: d, act: 'digit', arg: d, cls: 'k-num' })),
+    { label: '×', aria: 'Multiply', act: 'op', arg: '×', cls: 'k-op' },
+    ...['4', '5', '6'].map((d) => ({ label: d, act: 'digit', arg: d, cls: 'k-num' })),
+    { label: '−', aria: 'Minus', act: 'op', arg: '−', cls: 'k-op' },
+    ...['1', '2', '3'].map((d) => ({ label: d, act: 'digit', arg: d, cls: 'k-num' })),
+    { label: '+', aria: 'Plus', act: 'op', arg: '+', cls: 'k-op' },
+    { label: '0', act: 'digit', arg: '0', cls: 'k-num' },
+    { label: '.', aria: 'Decimal point', act: 'dot', cls: 'k-num' },
+    { label: '⌫', aria: 'Delete', act: 'del', cls: 'k-op' },
+    { label: '=', aria: 'Equals', act: 'equals', cls: 'k-eq' },
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    mem: $('keys-mem'), sci: $('keys-sci'), pad: $('keys-pad'), prev: $('prev'), main: $('main'), sr: $('sr'),
+    indDeg: $('ind-deg'), indRad: $('ind-rad'), ind2nd: $('ind-2nd'), indM: $('ind-m'),
+    history: $('history'), histClear: $('hist-clear'),
+  };
+
+  function build(container, specs) {
+    for (const spec of specs) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'key ' + spec.cls;
+      b.dataset.i = String(specs.indexOf(spec));
+      b.dataset.group = container.id;
+      spec.node = b;
+      container.append(b);
+    }
+  }
+  build(el.mem, mem); build(el.sci, sci); build(el.pad, pad);
+  const GROUPS = { 'keys-mem': mem, 'keys-sci': sci, 'keys-pad': pad };
+
+  function paintKeys() {
+    for (const spec of [...mem, ...sci, ...pad]) {
+      const b = spec.node;
+      if (spec.id === 'mode') {
+        b.textContent = state.deg ? 'DEG' : 'RAD';
+        b.setAttribute('aria-label', 'Angle mode: ' + (state.deg ? 'degrees' : 'radians') + '. Press to switch.');
+        continue;
+      }
+      if (spec.id === 'second') {
+        b.textContent = spec.label;
+        b.setAttribute('aria-pressed', String(state.second));
+        b.setAttribute('aria-label', spec.aria);
+        continue;
+      }
+      const alt = state.second && spec.label2;
+      b.textContent = alt ? spec.label2 : spec.label;
+      if (spec.aria) b.setAttribute('aria-label', alt ? spec.aria2 : spec.aria);
+    }
+  }
+
+  function press(spec) {
+    const useAlt = state.second && spec.label2;
+    const act = useAlt && spec.act2 ? spec.act2 : spec.act;
+    const arg = useAlt ? spec.arg2 : spec.arg;
+    switch (act) {
+      case 'digit': insertDigit(arg); break;
+      case 'dot': insertDot(); break;
+      case 'op': insertOp(arg); break;
+      case 'open': insertOpen(); break;
+      case 'close': insertClose(); break;
+      case 'const': insertConst(arg); break;
+      case 'fn': insertFn(arg); break;
+      case 'macro': MACROS[arg](); break;
+      case 'clear': clearAll(); break;
+      case 'del': del(); break;
+      case 'equals': equals(); break;
+      case 'mode': state.deg = !state.deg; save(); break;
+      case 'second': state.second = !state.second; break;
+      case 'memClear': state.memory = 0; save(); break;
+      case 'memRecall': memRecall(); break;
+      case 'memAdd': memAdjust(1); break;
+      case 'memSub': memAdjust(-1); break;
+    }
+    if (useAlt) state.second = false;
+  }
+
+  for (const c of [el.mem, el.sci, el.pad]) {
+    c.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      press(GROUPS[b.dataset.group][Number(b.dataset.i)]);
+      render();
+    });
+  }
+
+  // ===================== keyboard =====================
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    if ((k === 'Enter' || k === ' ') && e.target instanceof HTMLButtonElement) return;   // the focused button handles itself
+    let handled = true;
+    if (/^[0-9]$/.test(k)) insertDigit(k);
+    else if (k === '.' || k === ',') insertDot();
+    else if (k === '+') insertOp('+');
+    else if (k === '-') insertOp('−');
+    else if (k === '*' || k === 'x' || k === 'X') insertOp('×');
+    else if (k === '/') insertOp('÷');
+    else if (k === '^') insertOp('^');
+    else if (k === '!' || k === '%') insertOp(k);
+    else if (k === '(') insertOpen();
+    else if (k === ')') insertClose();
+    else if (k === 'Enter' || k === '=') equals();
+    else if (k === 'Backspace') del();
+    else if (k === 'Escape' || k === 'Delete') clearAll();
+    else if (k === 'p') insertConst('π');
+    else if (k === 'e') insertConst('e');
+    else if (k === 's') insertFn('sin');
+    else if (k === 'c') insertFn('cos');
+    else if (k === 't') insertFn('tan');
+    else if (k === 'l') insertFn('ln');
+    else if (k === 'r') insertFn('√');
+    else handled = false;
+    if (handled) { e.preventDefault(); render(); }
+  });
+
+  // ===================== render =====================
+  let lastAnnounce = '';
+  function announce(msg) { lastAnnounce = msg; }
+  const setText = (node, t) => { if (node.textContent !== t) node.textContent = t; };
+
+  function previewText() {
+    if (state.justEvaluated || !state.expr || /^[−]?[0-9.]+$/.test(state.expr)) return '';
+    try { return formatNumber(evaluate(autoClose(state.expr), ctx())); } catch (e) { return ''; }
+  }
+
+  function render() {
+    const mainText = state.justEvaluated ? formatNumber(state.ans) : (state.expr || '0');
+    setText(el.main, mainText);
+    el.main.dataset.size = mainText.length > 22 ? 's' : mainText.length > 13 ? 'm' : 'l';
+    el.main.scrollLeft = el.main.scrollWidth;
+
+    let prev = '';
+    el.prev.classList.toggle('err', !!state.error);
+    if (state.error) prev = state.error;
+    else if (state.justEvaluated) prev = state.prevExpr + ' =';
+    else { const p = previewText(); prev = p ? '= ' + p : ''; }
+    setText(el.prev, prev || ' ');
+    el.prev.scrollLeft = el.prev.scrollWidth;
+
+    el.indDeg.classList.toggle('on', state.deg);
+    el.indRad.classList.toggle('on', !state.deg);
+    el.ind2nd.classList.toggle('on', state.second);
+    el.indM.classList.toggle('on', state.memory !== 0);
+    paintKeys();
+
+    if (lastAnnounce) { setText(el.sr, lastAnnounce); lastAnnounce = ''; }
+    renderHistory();
+  }
+
+  let historySig = '';
+  function renderHistory() {
+    const sig = state.history.map((h) => h.expr + '=' + h.result).join('|');
+    if (sig === historySig) return;
+    historySig = sig;
+    el.history.replaceChildren();
+    el.histClear.hidden = !state.history.length;
+    if (!state.history.length) {
+      const li = document.createElement('li');
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'Finished calculations appear here. Tap one to edit it.';
+      li.append(p);
+      el.history.append(li);
+      return;
+    }
+    state.history.forEach((h, i) => {
+      const li = document.createElement('li');
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'hist-item'; b.dataset.i = String(i);
+      const x = document.createElement('span'); x.className = 'hx'; x.textContent = h.expr;
+      const r = document.createElement('span'); r.className = 'hr'; r.textContent = '= ' + h.result;
+      b.append(x, r);
+      li.append(b);
+      el.history.append(li);
+    });
+  }
+  el.history.addEventListener('click', (e) => {
+    const b = e.target.closest('.hist-item');
+    if (!b) return;
+    const h = state.history[Number(b.dataset.i)];
+    if (!h) return;
+    state.expr = h.expr; state.prevExpr = ''; state.justEvaluated = false; state.error = '';
+    render();
+  });
+  el.histClear.addEventListener('click', () => { state.history = []; save(); render(); });
+
+  // copy the value on screen
+  const copyBtn = document.createElement('button');
+  copyBtn.type = 'button'; copyBtn.className = 'copy'; copyBtn.textContent = 'Copy';
+  copyBtn.setAttribute('aria-label', 'Copy the number on screen');
+  document.querySelector('.lcd-status').append(copyBtn);
+  document.querySelector('.lcd-status').removeAttribute('aria-hidden');
+  for (const ind of document.querySelectorAll('.ind')) ind.setAttribute('aria-hidden', 'true');
+  copyBtn.addEventListener('click', async () => {
+    const text = state.justEvaluated ? formatNumber(state.ans) : (previewText() || state.expr || '0');
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.append(ta); ta.select(); ok = document.execCommand('copy'); ta.remove();
+      } catch (e2) { ok = false; }
+    }
+    copyBtn.textContent = ok ? 'Copied' : 'Not copied';
+    setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+  });
+
+  load();
+  render();
+})();
+</script>
+
+</body></html>
